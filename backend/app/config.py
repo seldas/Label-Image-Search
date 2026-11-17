@@ -29,6 +29,7 @@ class Settings(BaseSettings):
     embedding_batch_size: int = 16
 
     # DailyMed sync schedule
+    dailymed_index_url: str = "https://dailymed.nlm.nih.gov/dailymed/spl-resources-all-drug-labels.cfm"
     dailymed_base_url: str = "https://dailymed-data.nlm.nih.gov/public-release-files"
     sync_cron_day_of_week: str = "sun"
     sync_cron_hour: int = 2

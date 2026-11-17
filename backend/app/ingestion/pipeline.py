@@ -177,16 +177,19 @@ class IngestionPipeline:
 
     def run_full_sync(self) -> None:
         logger.info("Starting FULL DailyMed sync for categories: %s", settings.categories_list)
-        files = self.downloader.get_full_release_files(settings.categories_list)
-        for fname in files:
-            cat = "human_rx" if "human_rx" in fname.lower() else "human_otc"
-            zip_path = self.downloader.download_file(fname)
+        urls = self.downloader.get_full_release_urls(settings.categories_list)
+        if not urls:
+            raise RuntimeError("No full release DailyMed zip URLs found.")
+        for url in urls:
+            cat = "human_rx" if "human_rx" in url.lower() else "human_otc"
+            zip_path = self.downloader.download_file(url)
             self._process_zip_file(zip_path, sync_type="full", category=cat)
 
     def run_weekly_sync(self) -> None:
-        logger.info("Starting WEEKLY DailyMed sync for categories: %s", settings.categories_list)
-        files = self.downloader.get_latest_weekly_files(settings.categories_list)
-        for fname in files:
-            cat = "human_rx" if "human_rx" in fname.lower() else "human_otc"
-            zip_path = self.downloader.download_file(fname)
-            self._process_zip_file(zip_path, sync_type="weekly", category=cat)
+        logger.info("Starting WEEKLY DailyMed sync...")
+        urls = self.downloader.get_latest_weekly_urls()
+        if not urls:
+            raise RuntimeError("No weekly update DailyMed zip URLs found.")
+        for url in urls:
+            zip_path = self.downloader.download_file(url)
+            self._process_zip_file(zip_path, sync_type="weekly", category="weekly_update")
