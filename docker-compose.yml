@@ -1,0 +1,68 @@
+services:
+  postgres:
+    image: pgvector/pgvector:pg16
+    container_name: labeling-query-pg
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-labeling_db}
+      POSTGRES_USER: ${POSTGRES_USER:-labeling}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-labeling_pass}
+    volumes:
+      - ./data/pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-labeling} -d ${POSTGRES_DB:-labeling_db}"]
+      interval: 5s
+      timeout: 5s
+      retries: 15
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: labeling-query-api
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      - DATA_DIR=/app/data
+    volumes:
+      - ./data:/app/data
+      - ./models:/app/models
+    ports:
+      - "8000:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+
+  worker:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: labeling-query-worker
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      - DATA_DIR=/app/data
+    volumes:
+      - ./data:/app/data
+      - ./models:/app/models
+    depends_on:
+      postgres:
+        condition: service_healthy
+    # Runs initial full sync if DB is empty, then waits for weekly cron & manual admin requests
+    command: ["python", "-m", "app.worker"]
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: labeling-query-web
+    restart: unless-stopped
+    ports:
+      - "8080:80"
+    depends_on:
+      - backend

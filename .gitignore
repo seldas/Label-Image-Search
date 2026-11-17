@@ -1,0 +1,21 @@
+# Data & local models (never commit)
+data/
+models/
+*.db
+*.db-wal
+*.db-shm
+
+# Environment
+.env
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+venv/
+
+# Node / Frontend
+frontend/node_modules/
+frontend/dist/
+.DS_Store
