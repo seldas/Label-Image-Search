@@ -31,7 +31,7 @@ services:
       - ./data:/app/data
       - ./models:/app/models
     ports:
-      - "8000:8000"
+      - "8846:8000"
     depends_on:
       postgres:
         condition: service_healthy
@@ -63,6 +63,6 @@ services:
     container_name: labeling-query-web
     restart: unless-stopped
     ports:
-      - "8080:80"
+      - "8845:80"
     depends_on:
       - backend

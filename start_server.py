@@ -76,8 +76,8 @@ def main() -> int:
     sync_database()
 
     print("\n[start_server] All services are up and database is synced!")
-    print("  - Web UI & Admin Dashboard : http://localhost:8080")
-    print("  - FastAPI Swagger Docs     : http://localhost:8000/docs")
+    print("  - Web UI & Admin Dashboard : http://localhost:8845")
+    print("  - FastAPI Swagger Docs     : http://localhost:8846/docs")
     return 0
 
 
