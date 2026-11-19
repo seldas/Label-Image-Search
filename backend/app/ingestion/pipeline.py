@@ -7,6 +7,10 @@ from pathlib import Path
 import imagehash
 from PIL import Image
 
+# Allow very tall DailyMed OTC label scans without triggering DecompressionBombError
+Image.MAX_IMAGE_PIXELS = None
+MAX_ORIG_DIMENSION = 4096
+
 from app.config import settings
 from app.db.postgres_store import PostgresStore
 from app.ingestion.downloader import DailyMedDownloader
@@ -37,6 +41,9 @@ class IngestionPipeline:
         orig_abs.parent.mkdir(parents=True, exist_ok=True)
 
         rgb = pil_img.convert("RGB")
+        if max(rgb.size) > MAX_ORIG_DIMENSION:
+            rgb.thumbnail((MAX_ORIG_DIMENSION, MAX_ORIG_DIMENSION), Image.Resampling.LANCZOS)
+
         if not orig_abs.exists():
             rgb.save(orig_abs, format="WEBP", quality=90)
 
@@ -97,42 +104,47 @@ class IngestionPipeline:
                     try:
                         pil_img = Image.open(io.BytesIO(img.data))
                         pil_img.load()
-                    except Exception:
+                        w, h = pil_img.size
+                        if w < settings.min_image_size or h < settings.min_image_size:
+                            continue
+
+                        phash_str = str(imagehash.phash(pil_img))
+                        image_id = md5_hash[:20]
+                        orig_rel, thumb_rel = self._save_image_files(image_id, pil_img)
+
+                        vlm_caption = ""
+                        if settings.ingest_vlm_caption:
+                            ctx = f"{spl.product_name} ({spl.generic_name}) - {img.section_title}"
+                            vlm_caption = vlm_client.caption_image(img.data, ctx)
+
+                        is_new = self.db.insert_image_and_link(
+                            image_id=image_id,
+                            md5_hash=md5_hash,
+                            phash=phash_str,
+                            width=w,
+                            height=h,
+                            orig_rel_path=orig_rel,
+                            thumb_rel_path=thumb_rel,
+                            setid=spl.setid,
+                            media_id=img.media_id,
+                            section_title=img.section_title,
+                            xml_context=img.xml_context,
+                            product_name=spl.product_name,
+                            generic_name=spl.generic_name,
+                            manufacturer=spl.manufacturer,
+                            vlm_caption=vlm_caption,
+                        )
+                        if is_new:
+                            images_added += 1
+                            pending_vectors.append((image_id, pil_img.copy()))
+                    except Exception as img_exc:
+                        logger.warning(
+                            "Skipping problematic image %s in SetID %s: %s",
+                            img.filename,
+                            spl.setid,
+                            img_exc,
+                        )
                         continue
-
-                    w, h = pil_img.size
-                    if w < settings.min_image_size or h < settings.min_image_size:
-                        continue
-
-                    phash_str = str(imagehash.phash(pil_img))
-                    image_id = md5_hash[:20]
-                    orig_rel, thumb_rel = self._save_image_files(image_id, pil_img)
-
-                    vlm_caption = ""
-                    if settings.ingest_vlm_caption:
-                        ctx = f"{spl.product_name} ({spl.generic_name}) - {img.section_title}"
-                        vlm_caption = vlm_client.caption_image(img.data, ctx)
-
-                    is_new = self.db.insert_image_and_link(
-                        image_id=image_id,
-                        md5_hash=md5_hash,
-                        phash=phash_str,
-                        width=w,
-                        height=h,
-                        orig_rel_path=orig_rel,
-                        thumb_rel_path=thumb_rel,
-                        setid=spl.setid,
-                        media_id=img.media_id,
-                        section_title=img.section_title,
-                        xml_context=img.xml_context,
-                        product_name=spl.product_name,
-                        generic_name=spl.generic_name,
-                        manufacturer=spl.manufacturer,
-                        vlm_caption=vlm_caption,
-                    )
-                    if is_new:
-                        images_added += 1
-                        pending_vectors.append((image_id, pil_img.copy()))
 
                     if len(pending_vectors) >= settings.embedding_batch_size:
                         self._flush_vectors(pending_vectors)
