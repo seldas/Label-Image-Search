@@ -174,14 +174,15 @@ export default function AdminDashboard() {
 
         <div className="bg-white rounded-2xl border border-slate-200 p-4">
           <div className="flex items-center justify-between text-xs text-slate-500 mb-1">
-            <span>Local Disk Usage</span>
+            <span>Disk &amp; DB Storage</span>
             <HardDrive className="w-4 h-4 text-indigo-600" />
           </div>
           <div className="text-2xl font-bold text-slate-900">
-            {overview ? `${(overview.storage.images_mb + overview.storage.db_mb).toFixed(1)} MB` : "-"}
+            {overview ? `${overview.storage.disk_free_gb} GB free` : "-"}
           </div>
           <div className="text-[11px] text-slate-400 mt-1">
-            Images {overview ? overview.storage.images_mb : 0} MB · DB {overview ? overview.storage.db_mb : 0} MB
+            DB {overview ? overview.storage.db_mb : 0} MB · Used{" "}
+            {overview ? `${overview.storage.disk_used_gb}/${overview.storage.disk_total_gb} GB` : "-"}
           </div>
         </div>
 
