@@ -389,6 +389,14 @@ class PostgresStore:
                 "last_sync": dict(last_sync) if last_sync else None,
             }
 
+    def get_db_size_mb(self) -> float:
+        """Returns PostgreSQL database size in MB instantaneously via pg_database_size()."""
+        with self.connect() as conn:
+            row = conn.execute(
+                "SELECT pg_database_size(current_database()) / (1024.0 * 1024.0) AS mb"
+            ).fetchone()
+            return round(float(row["mb"]), 2) if row else 0.0
+
     def enqueue_sync_request(self, sync_type: str) -> int:
         with self.connect() as conn:
             active = conn.execute(

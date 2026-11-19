@@ -1,3 +1,6 @@
+import subprocess
+import threading
+import time
 from pathlib import Path
 
 from fastapi import Depends, FastAPI, File, Form, Header, HTTPException, Query, UploadFile
@@ -84,11 +87,43 @@ def _require_admin(x_admin_token: str = Header(default="")) -> None:
         raise HTTPException(status_code=401, detail="Invalid or missing Admin Token.")
 
 
-def _dir_size_mb(path: Path) -> float:
+_images_size_cache = {"mb": 0.0, "updated_at": 0.0, "refreshing": False}
+_images_size_lock = threading.Lock()
+_IMAGES_SIZE_TTL_SEC = 300.0
+
+
+def _compute_dir_size_mb(path: Path) -> float:
     if not path.exists():
         return 0.0
-    total = sum(f.stat().st_size for f in path.rglob("*") if f.is_file())
-    return round(total / (1024 * 1024), 2)
+    try:
+        # Fast native `du -sm` on Linux containers
+        out = subprocess.check_output(["du", "-sm", str(path)], text=True, timeout=60)
+        return float(out.split()[0])
+    except Exception:
+        total = sum(f.stat().st_size for f in path.rglob("*") if f.is_file())
+        return round(total / (1024 * 1024), 2)
+
+
+def _get_images_size_mb_cached() -> float:
+    """Returns cached images directory size immediately; refreshes asynchronously every 5 minutes."""
+    now = time.time()
+    with _images_size_lock:
+        stale = (now - _images_size_cache["updated_at"]) > _IMAGES_SIZE_TTL_SEC
+        if stale and not _images_size_cache["refreshing"]:
+            _images_size_cache["refreshing"] = True
+
+            def _bg() -> None:
+                try:
+                    mb = _compute_dir_size_mb(settings.images_dir)
+                    with _images_size_lock:
+                        _images_size_cache["mb"] = mb
+                        _images_size_cache["updated_at"] = time.time()
+                finally:
+                    with _images_size_lock:
+                        _images_size_cache["refreshing"] = False
+
+            threading.Thread(target=_bg, daemon=True).start()
+        return _images_size_cache["mb"]
 
 
 class SyncTriggerRequest(BaseModel):
@@ -100,8 +135,8 @@ def admin_overview() -> dict:
     return {
         "stats": engine.db.get_stats(),
         "storage": {
-            "images_mb": _dir_size_mb(settings.images_dir),
-            "db_mb": _dir_size_mb(settings.data_dir / "pgdata"),
+            "images_mb": _get_images_size_mb_cached(),
+            "db_mb": engine.db.get_db_size_mb(),
         },
         "active_sync": engine.db.get_active_sync_status(),
         "sync_logs": engine.db.get_sync_logs(limit=20),

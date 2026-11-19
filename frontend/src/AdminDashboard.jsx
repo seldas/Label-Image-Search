@@ -42,11 +42,21 @@ export default function AdminDashboard() {
   };
 
   useEffect(() => {
-    loadOverview();
-    const timer = setInterval(() => {
-      loadOverview();
-    }, 8000);
-    return () => clearInterval(timer);
+    let cancelled = false;
+    let timerId = null;
+
+    const poll = async () => {
+      await loadOverview();
+      if (!cancelled) {
+        timerId = setTimeout(poll, 15000);
+      }
+    };
+
+    poll();
+    return () => {
+      cancelled = true;
+      if (timerId) clearTimeout(timerId);
+    };
   }, [token]);
 
   const handleAuthSubmit = (e) => {
@@ -241,7 +251,7 @@ export default function AdminDashboard() {
       <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden">
         <div className="px-5 py-3.5 border-b border-slate-100 flex items-center justify-between">
           <h3 className="text-sm font-semibold text-slate-900">Recent Sync Logs</h3>
-          <span className="text-xs text-slate-400">Auto-refreshes every 8s</span>
+          <span className="text-xs text-slate-400">Auto-refreshes every 15s</span>
         </div>
         <div className="overflow-x-auto">
           <table className="w-full text-left text-xs">
