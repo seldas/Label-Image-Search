@@ -181,6 +181,10 @@ class IngestionPipeline:
         if not urls:
             raise RuntimeError("No full release DailyMed zip URLs found.")
         for url in urls:
+            filename = url.rsplit("/", 1)[-1]
+            if self.db.is_filename_processed(filename):
+                logger.info("Skipping already-completed archive before download: %s", filename)
+                continue
             cat = "human_rx" if "human_rx" in url.lower() else "human_otc"
             zip_path = self.downloader.download_file(url)
             self._process_zip_file(zip_path, sync_type="full", category=cat)
@@ -191,5 +195,9 @@ class IngestionPipeline:
         if not urls:
             raise RuntimeError("No weekly update DailyMed zip URLs found.")
         for url in urls:
+            filename = url.rsplit("/", 1)[-1]
+            if self.db.is_filename_processed(filename):
+                logger.info("Skipping already-completed weekly archive before download: %s", filename)
+                continue
             zip_path = self.downloader.download_file(url)
             self._process_zip_file(zip_path, sync_type="weekly", category="weekly_update")
