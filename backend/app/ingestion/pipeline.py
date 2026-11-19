@@ -1,6 +1,7 @@
 import hashlib
 import io
 import logging
+import traceback
 from pathlib import Path
 
 import imagehash
@@ -156,12 +157,13 @@ class IngestionPipeline:
             )
         except Exception as exc:
             logger.exception("Failed processing %s: %s", filename, exc)
+            tb_text = traceback.format_exc()[-4000:]
             self.db.finish_sync_log(
                 log_id,
                 status="failed",
                 setids_processed=setids_count,
                 images_added=images_added,
-                error_message=str(exc),
+                error_message=tb_text or str(exc),
             )
             raise
         finally:

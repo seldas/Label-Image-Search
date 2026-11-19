@@ -10,6 +10,8 @@ import {
   Loader2,
   Lock,
   Cpu,
+  X,
+  Copy,
 } from "lucide-react";
 import { fetchAdminOverview, triggerAdminSync } from "./api";
 
@@ -23,6 +25,8 @@ export default function AdminDashboard() {
   const [syncing, setSyncing] = useState(false);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
+  const [selectedErrorLog, setSelectedErrorLog] = useState(null);
+  const [copied, setCopied] = useState(false);
 
   const loadOverview = async (activeToken = token) => {
     setError("");
@@ -274,17 +278,30 @@ export default function AdminDashboard() {
                     </td>
                     <td className="px-4 py-2.5 font-mono text-slate-600">{log.filename}</td>
                     <td className="px-4 py-2.5">
-                      <span
-                        className={`inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium ${
-                          log.status === "completed"
-                            ? "bg-emerald-50 text-emerald-700"
-                            : log.status === "running"
-                            ? "bg-blue-50 text-blue-700"
-                            : "bg-red-50 text-red-700"
-                        }`}
-                      >
-                        {log.status}
-                      </span>
+                      {log.status === "failed" ? (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setCopied(false);
+                            setSelectedErrorLog(log);
+                          }}
+                          title="Click to inspect error details"
+                          className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-medium bg-red-50 text-red-700 hover:bg-red-100 border border-red-200 cursor-pointer transition"
+                        >
+                          <AlertCircle className="w-3 h-3" />
+                          failed
+                        </button>
+                      ) : (
+                        <span
+                          className={`inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium ${
+                            log.status === "completed"
+                              ? "bg-emerald-50 text-emerald-700"
+                              : "bg-blue-50 text-blue-700"
+                          }`}
+                        >
+                          {log.status}
+                        </span>
+                      )}
                     </td>
                     <td className="px-4 py-2.5 text-slate-700">{log.setids_processed}</td>
                     <td className="px-4 py-2.5 text-slate-700">{log.images_added}</td>
@@ -304,6 +321,64 @@ export default function AdminDashboard() {
           </table>
         </div>
       </div>
+      {/* Error Log Modal */}
+      {selectedErrorLog && (
+        <div
+          className="fixed inset-0 z-50 bg-slate-900/60 flex items-center justify-center p-4"
+          onClick={() => setSelectedErrorLog(null)}
+        >
+          <div
+            className="bg-white rounded-2xl max-w-3xl w-full max-h-[85vh] overflow-hidden shadow-xl flex flex-col"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between gap-3">
+              <div className="flex items-center gap-2">
+                <AlertCircle className="w-5 h-5 text-red-600 shrink-0" />
+                <div>
+                  <h3 className="text-sm font-semibold text-slate-900">
+                    Sync Error Details · {selectedErrorLog.filename}
+                  </h3>
+                  <p className="text-[11px] text-slate-500">
+                    Type: {selectedErrorLog.sync_type} · SetIDs: {selectedErrorLog.setids_processed} ·
+                    Images Added: {selectedErrorLog.images_added} · Started:{" "}
+                    {selectedErrorLog.started_at?.slice(0, 19).replace("T", " ")} UTC
+                  </p>
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                {selectedErrorLog.error_message && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      navigator.clipboard?.writeText(selectedErrorLog.error_message);
+                      setCopied(true);
+                      setTimeout(() => setCopied(false), 2000);
+                    }}
+                    className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-medium bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg"
+                  >
+                    <Copy className="w-3.5 h-3.5" />
+                    {copied ? "Copied" : "Copy"}
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={() => setSelectedErrorLog(null)}
+                  className="p-1 rounded-lg hover:bg-slate-100 text-slate-500"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+            </div>
+
+            <div className="p-5 overflow-y-auto flex-1 bg-slate-950 text-slate-100">
+              <pre className="text-xs font-mono whitespace-pre-wrap break-words leading-relaxed">
+                {selectedErrorLog.error_message ||
+                  "No error message recorded in DB. The worker container may have been restarted or OOM-killed; check `docker compose logs worker`."}
+              </pre>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
