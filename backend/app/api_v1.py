@@ -11,7 +11,7 @@ from typing import Any, Callable
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, Response, UploadFile
 from fastapi.security import APIKeyHeader, HTTPAuthorizationCredentials, HTTPBearer
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 from starlette.concurrency import run_in_threadpool
 
 from app.config import settings
@@ -150,15 +150,26 @@ async def _read_upload_limited(upload: UploadFile, max_bytes: int) -> bytes:
 
 
 class SearchV1JSONRequest(BaseModel):
+    model_config = ConfigDict(
+        json_schema_extra={
+            "example": {
+                "text": "white oval tablet scored L484",
+                "image_base64": None,
+                "top_k": 9,
+                "offset": 0,
+                "use_ai": True,
+            }
+        }
+    )
+
     text: str | None = Field(
         default=None,
         max_length=2000,
         description="Text description, drug name, or imprint query.",
-        json_schema_extra={"example": "white oval tablet scored L484"},
     )
     image_base64: str | None = Field(
         default=None,
-        description="Optional raw base64 or data-URI encoded reference image.",
+        description="Optional raw base64 or data-URI encoded reference image (omit or null for text-only search).",
     )
     top_k: int = Field(default=9, ge=1, le=200, description="Number of results to return.")
     offset: int = Field(default=0, ge=0, le=500, description="Pagination offset into ranked hits.")
