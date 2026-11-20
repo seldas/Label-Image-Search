@@ -5,7 +5,9 @@ from fastapi import Depends, FastAPI, File, Form, Header, HTTPException, Query, 
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
+from starlette.concurrency import run_in_threadpool
 
+from app.api_v1 import create_v1_router
 from app.config import settings
 from app.search.engine import HybridSearchEngine
 
@@ -19,6 +21,7 @@ app.add_middleware(
 )
 
 engine = HybridSearchEngine()
+app.include_router(create_v1_router(lambda: engine))
 
 
 @app.get("/api/health")
@@ -49,7 +52,15 @@ async def search(
     if not clean_text and not image_bytes:
         raise HTTPException(status_code=400, detail="Provide at least text or an image.")
 
-    return engine.search(text=clean_text, image_bytes=image_bytes, use_ai=use_ai)
+    try:
+        return await run_in_threadpool(
+            engine.search,
+            text=clean_text,
+            image_bytes=image_bytes,
+            use_ai=use_ai,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
 @app.get("/api/search/{search_id}")
@@ -77,7 +88,11 @@ def get_image_file(image_id: str, variant: str) -> FileResponse:
     if not abs_path.exists():
         raise HTTPException(status_code=404, detail="Image file missing on disk.")
 
-    return FileResponse(abs_path, media_type="image/webp")
+    return FileResponse(
+        abs_path,
+        media_type="image/webp",
+        headers={"Cache-Control": "public, max-age=86400"},
+    )
 
 
 def _require_admin(x_admin_token: str = Header(default="")) -> None:

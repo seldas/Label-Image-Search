@@ -42,3 +42,54 @@
    # 手动触发一次全量同步
    docker compose exec worker python -m app.worker --run-once full
    ```
+
+## RESTful API (v1) 第三方接入
+
+系统同时暴露了无状态、带静态 API Key 鉴权与限流保护的 `/api/v1` 接口供第三方服务调用（在线文档：`http://<server-ip>:8846/docs`）。
+
+### 1. 配置 `.env`
+```env
+API_KEYS=liq_team_a_secret,liq_team_b_secret
+API_REQUIRE_KEY=true
+API_RATE_LIMIT_RPM=60
+# 可选：指定返回图片链接的外部基础地址；留空时自动从请求头推导
+PUBLIC_BASE_URL=http://<server-ip>:8845
+```
+
+### 2. JSON 图文查询（`POST /api/v1/search`）
+支持请求头 `X-API-Key: <key>` 或 `Authorization: Bearer <key>`，返回包含完整 `thumb_url` / `orig_url` 链接的结果列表：
+```bash
+curl -X POST "http://<server-ip>:8845/api/v1/search" \
+  -H "Content-Type: application/json" \
+  -H "X-API-Key: liq_team_a_secret" \
+  -d '{"text": "white oval tablet scored L484", "top_k": 9, "use_ai": true}'
+```
+
+### 3. Multipart 文件上传查询（`POST /api/v1/search/upload`）
+```bash
+curl -X POST "http://<server-ip>:8845/api/v1/search/upload" \
+  -H "Authorization: Bearer liq_team_a_secret" \
+  -F "text=blue capsule" \
+  -F "image=@/path/to/query.jpg" \
+  -F "top_k=9"
+```
+
+### 4. Python 调用示例
+```python
+import base64
+import requests
+
+with open("pill.jpg", "rb") as f:
+    img_b64 = base64.b64encode(f.read()).decode("utf-8")
+
+resp = requests.post(
+    "http://<server-ip>:8845/api/v1/search",
+    headers={"X-API-Key": "liq_team_a_secret"},
+    json={"text": "white tablet", "image_base64": img_b64, "top_k": 9, "use_ai": True},
+    timeout=30,
+)
+resp.raise_for_status()
+data = resp.json()
+for item in data["items"]:
+    print(item["product_name"], item["score"], item["orig_url"])
+```

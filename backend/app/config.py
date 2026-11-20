@@ -47,6 +47,22 @@ class Settings(BaseSettings):
     # Admin Dashboard (leave empty to disable token auth in trusted intranet)
     admin_token: str = ""
 
+    # Public RESTful API (v1)
+    api_keys: str = ""
+    api_require_key: bool = True
+    api_rate_limit_rpm: int = 60
+    api_max_upload_mb: int = 10
+    api_max_top_k: int = 50
+    public_base_url: str = ""
+
+    @property
+    def api_keys_set(self) -> set[str]:
+        return {k.strip() for k in self.api_keys.split(",") if k.strip()}
+
+    @property
+    def api_max_upload_bytes(self) -> int:
+        return self.api_max_upload_mb * 1024 * 1024
+
     @property
     def categories_list(self) -> list[str]:
         return [c.strip().lower() for c in self.dailymed_categories.split(",") if c.strip()]
